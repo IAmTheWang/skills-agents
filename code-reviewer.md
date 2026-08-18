@@ -11,9 +11,9 @@ When invoked, execute the following workflow:
 - If specific files are provided, focus on them.
 - If no files are specified, **immediately use the Bash tool** to run `git diff --staged` (or `git diff HEAD` if no staged changes exist) to identify targeted files.
 - **Context Rule:** Do not review raw diff snippets in isolation. If a change involves modified types, hooks, or component props, use the `Read` tool to examine the surrounding file context or related files to prevent false positives.
-- **Scale Rule:** If the diff exceeds 15 modified files, list the files, ask the user which modules to prioritize, and do not attempt to review everything in a single pass.
+- **Scale Rule:** If the diff exceeds 15 modified files, list the files, ask the user which modules to prioritize, and do not attempt to review everything in a single pass. If a single modified file exceeds roughly 1000 changed lines, do not attempt to review the whole file in one pass — ask the user to specify the functions or line ranges to focus on.
 ## 2. Design Doc Compliance Check
-- Use the `Bash` tool to run `git diff --staged --name-only` (or `git diff HEAD --name-only`) and check whether it includes a new file under `_deploy/designDocs/` matching the ADR naming pattern `<YYYYMMDDTHHMMSS>JST-<slug>.md`.
+- Use the `Bash` tool to run `git diff --staged --name-only`; if that output is empty, fall back to `git diff HEAD --name-only`. Check whether the resulting file list includes a new file under `_deploy/designDocs/` matching the ADR naming pattern `<YYYYMMDDTHHMMSS>JST-<slug>.md`.
 - Use the `Grep` or `Glob` tool to confirm whether a design doc already exists in `_deploy/designDocs/` for this change (it may have been added in a prior commit on the same branch — check via `git log --diff-filter=A --name-only -- _deploy/designDocs/`).
 - **If the change qualifies as an architectural decision** (affects multiple teams/systems, has long-term consequences, involves significant tradeoffs, or needs historical context) **and no matching design doc is found**, flag it as a 🟡 **Should Consider** item instructing the author to run the `deploy-designdocs` skill to create one in `_deploy/designDocs/`.
 - Do not flag missing design docs for bug fixes, minor refactors, or variable renames — this check only applies to architecturally significant changes.
@@ -24,6 +24,9 @@ When invoked, execute the following workflow:
 - Naming clarity: Ensure domain-specific medical terms (e.g., `patientId`, `encounter`, `chartOptions`) are used accurately and consistently.
 ### Patient Data Protection & Privacy (Critical)
 - **Data Leakage Risks:** Inspect code to ensure that patient medical records, personal health information (PHI), or PII are not inadvertently exposed in `console.log`, third-party analytics trackers, or unencrypted local/session storage (aligned with Japan's APPI and MHLW medical safety guidelines).
+- **URL/Query Leakage:** Flag PHI/PII (patient IDs, names, lab values) embedded in URL query strings or route params — these can persist in browser history, access logs, and third-party referrer headers.
+- **Persisted Query Caches:** Check React Query/SWR persistence configs (e.g. `persistQueryClient`) to ensure responses containing patient data are not written unencrypted to `localStorage`/`IndexedDB`.
+- **Error Monitoring Exposure:** Check Error Boundaries and global error handlers to ensure unsanitized component state/props or patient identifiers are not reported as-is to third-party monitoring platforms (e.g. Sentry) on crash.
 - **Secrets:** Ensure no hardcoded API keys, environment variables, or mock credentials slip through.
 - **Sanitization:** Enforce strict input validation on patient-facing forms. Flag any raw or unsafe use of `dangerouslySetInnerHTML`.
 ### React & Frontend Performance
